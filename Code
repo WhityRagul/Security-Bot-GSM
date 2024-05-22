@@ -1,0 +1,98 @@
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+#include <GSM.h>
+
+// Define software serial pins for GSM module
+SoftwareSerial gsmSerial(2, 3); // RX, TX
+
+// Define pins for the buzzer
+int buzzerPin = 4;
+
+// Define your GSM module settings
+#define PINNUMBER "" // If your SIM card is not locked with a PIN, leave it as ""
+
+// Define your GSM module credentials
+#define GSM_APN "your_apn"       // Your APN
+#define GSM_LOGIN "your_login"   // Your login
+#define GSM_PASSWORD "your_password" // Your password
+
+// Define the destination phone number
+#define DEST_PHONE_NUMBER "9247212405"
+
+// Set up GSM
+GSM gsmAccess;
+GSM_SMS sms;
+
+// Set up GPS
+TinyGPSPlus gps;
+
+// Define the target location
+const float targetLatitude = 37.7749; // Change this to your target latitude
+const float targetLongitude = -122.4194; // Change this to your target longitude
+
+void setup() {
+  // Initialize serial communication
+  Serial.begin(9600);
+  gsmSerial.begin(9600);
+
+  // Initialize pin for the buzzer
+  pinMode(buzzerPin, OUTPUT);
+
+  // Start GPS serial communication
+  Serial1.begin(9600);
+
+  // Initialize GSM
+  bool gsmConnected = false;
+  while (!gsmConnected) {
+    if (gsmAccess.begin(PINNUMBER) == GSM_READY) {
+      gsmConnected = true;
+    } else {
+      delay(1000);
+    }
+  }
+
+  // Connect to the GPRS network
+  while (gsmAccess.gprsConnect(GSM_APN, GSM_LOGIN, GSM_PASSWORD) != GPRS_READY) {
+    delay(1000);
+  }
+}
+
+void loop() {
+  // Read GPS data
+  while (Serial1.available() > 0) {
+    if (gps.encode(Serial1.read())) {
+      if (gps.location.isValid()) {
+        // Check if the location is within the desired range
+        if (isLocationTriggered()) {
+          // Activate the buzzer
+          activateBuzzer();
+          
+          // Send SMS
+          sendSMS("Alert! Device is at triggered location.");
+          
+          // Wait for a while to avoid sending multiple messages
+          delay(30000);
+        }
+      }
+    }
+  }
+}
+
+bool isLocationTriggered() {
+  // Check if the current GPS coordinates match the predefined location
+  return (gps.location.lat() == targetLatitude && gps.location.lng() == targetLongitude);
+}
+
+void activateBuzzer() {
+  // Activate the buzzer
+  digitalWrite(buzzerPin, HIGH);
+  delay(1000); // Buzzer on time
+  digitalWrite(buzzerPin, LOW);
+}
+
+void sendSMS(const char* message) {
+  // Send SMS
+  sms.beginSMS(DEST_PHONE_NUMBER);
+  sms.print(message);
+  sms.endSMS();
+}
